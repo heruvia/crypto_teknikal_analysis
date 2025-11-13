@@ -7,7 +7,7 @@ from openai import OpenAI
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Crypto Analyzer Pro", page_icon="💹", layout="wide")
+st.set_page_config(page_title="Crypto Technical Analyzer", page_icon="💹", layout="wide")
 
 # =========================
 # API KEY
