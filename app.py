@@ -42,7 +42,7 @@ st.markdown("""
 # =========================
 # HEADER
 # =========================
-st.title("💹 Crypto Analyzer Pro (Coinbase + GPT)")
+st.title("💹 Crypto Analyzer Pro (Coinbase + AI)")
 st.caption("Analisis teknikal otomatis (Entry, SL, TP) berdasarkan data candlestick Coinbase")
 
 # =========================
@@ -125,7 +125,7 @@ if df is not None:
     # =========================
     # ANALISIS GPT
     # =========================
-    if st.button("📊 Analisis Pasar dengan GPT", use_container_width=True):
+    if st.button("📊 Analisis Pasar dengan AI", use_container_width=True):
         with st.spinner("Menganalisis pasar..."):
             # Ambil data ringkas
             last_10 = df.tail(10)[["time", "open", "high", "low", "close"]].to_dict(orient="records")
