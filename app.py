@@ -3,14 +3,15 @@ import requests
 import pandas as pd
 import plotly.graph_objects as go
 from openai import OpenAI
-from datetime import datetime
 
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Crypto Analyzer", page_icon="💹", layout="wide")
+st.set_page_config(page_title="Crypto Analyzer Pro", page_icon="💹", layout="wide")
 
-# ======== API KEYS ========
+# =========================
+# API KEY
+# =========================
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "ISI_API_KEY_KAMU_DI_SINI")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -27,10 +28,13 @@ st.markdown("""
             color: white;
             border-radius: 8px;
             font-weight: 600;
+            border: none;
         }
         .stButton>button:hover {
             background-color: #2ea043;
-            color: white;
+        }
+        [data-testid="stSidebar"] {
+            background-color: #161b22;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -38,11 +42,11 @@ st.markdown("""
 # =========================
 # HEADER
 # =========================
-st.title("💹 Crypto Analyzer (Coinbase + GPT)")
-st.caption("Dapatkan analisis Entry, SL, dan TP berdasarkan data candlestick Coinbase")
+st.title("💹 Crypto Analyzer Pro (Coinbase + GPT)")
+st.caption("Analisis teknikal otomatis (Entry, SL, TP) berdasarkan data candlestick Coinbase")
 
 # =========================
-# PILIH ASET
+# SELEKSI ASET DAN TIMEFRAME
 # =========================
 coins = {
     "Bitcoin (BTC/USD)": "BTC-USD",
@@ -52,44 +56,67 @@ coins = {
     "Dogecoin (DOGE/USD)": "DOGE-USD"
 }
 
-selected_coin = st.selectbox("Pilih aset crypto:", list(coins.keys()))
-symbol = coins[selected_coin]
+timeframes = {
+    "1 Jam": 3600,
+    "4 Jam": 14400,
+    "1 Hari": 86400
+}
+
+col1, col2 = st.columns([2, 1])
+with col1:
+    selected_coin = st.selectbox("Pilih aset crypto:", list(coins.keys()))
+    symbol = coins[selected_coin]
+with col2:
+    selected_tf = st.selectbox("Pilih Timeframe:", list(timeframes.keys()))
+    granularity = timeframes[selected_tf]
 
 # =========================
 # FETCH DATA
 # =========================
 @st.cache_data(ttl=300)
-def get_coinbase_candles(symbol="BTC-USD", granularity=3600):
+def get_candlestick_data(symbol="BTC-USD", granularity=3600):
     url = f"https://api.exchange.coinbase.com/products/{symbol}/candles?granularity={granularity}"
     response = requests.get(url, timeout=10)
     if response.status_code != 200:
-        st.error("Gagal mengambil data dari Coinbase API.")
+        st.error("Gagal mengambil data candlestick dari Coinbase API.")
         return None
     data = response.json()
-    # Coinbase data format: [time, low, high, open, close, volume]
     df = pd.DataFrame(data, columns=["time", "low", "high", "open", "close", "volume"])
     df["time"] = pd.to_datetime(df["time"], unit="s")
     df = df.sort_values("time")
     return df
 
-df = get_coinbase_candles(symbol)
+df = get_candlestick_data(symbol, granularity)
 
+# =========================
+# TAMPILKAN GRAFIK
+# =========================
 if df is not None:
-    st.subheader(f"Grafik Candlestick: {selected_coin}")
-    fig = go.Figure(data=[go.Candlestick(
-        x=df["time"],
-        open=df["open"],
-        high=df["high"],
-        low=df["low"],
-        close=df["close"],
-        increasing_line_color='green',
-        decreasing_line_color='red'
-    )])
+    st.subheader(f"Grafik Candlestick — {selected_coin} ({selected_tf})")
+
+    fig = go.Figure(data=[
+        go.Candlestick(
+            x=df["time"],
+            open=df["open"],
+            high=df["high"],
+            low=df["low"],
+            close=df["close"],
+            increasing_line_color="lime",
+            decreasing_line_color="red",
+            name="Candlestick"
+        )
+    ])
+
     fig.update_layout(
-        xaxis_rangeslider_visible=False,
         template="plotly_dark",
-        height=500
+        xaxis_rangeslider_visible=True,  # bisa digeser manual
+        xaxis_title="Waktu",
+        yaxis_title="Harga (USD)",
+        height=600,
+        hovermode="x unified",
+        dragmode="pan",  # bisa digeser dengan drag
     )
+
     st.plotly_chart(fig, use_container_width=True)
 
     last_price = df["close"].iloc[-1]
@@ -100,21 +127,19 @@ if df is not None:
     # =========================
     if st.button("📊 Analisis Pasar dengan GPT", use_container_width=True):
         with st.spinner("Menganalisis pasar..."):
-
-            # Ambil data ringkas untuk GPT
-            last_5 = df.tail(5)[["time", "open", "high", "low", "close"]].to_dict(orient="records")
+            # Ambil data ringkas
+            last_10 = df.tail(10)[["time", "open", "high", "low", "close"]].to_dict(orient="records")
             prompt = f"""
-            Berikut adalah data harga {symbol} dari Coinbase (candlestick terakhir 5 jam):
+            Berikut adalah data harga {symbol} timeframe {selected_tf} dari Coinbase:
 
-            {last_5}
+            {last_10}
 
-            Berdasarkan data ini:
-            - Analisis apakah tren harga cenderung bullish, bearish, atau sideways.
-            - Berikan rekomendasi:
-              * Entry point (harga masuk)
-              * Stop Loss (SL)
-              * Take Profit (TP)
-            - Jelaskan dengan singkat dan profesional.
+            Analisis dengan:
+            - Tren harga (bullish, bearish, atau sideways)
+            - Entry point (harga masuk ideal)
+            - Stop Loss (SL)
+            - Take Profit (TP)
+            - Berikan reasoning teknikal singkat
             """
 
             try:
@@ -126,7 +151,5 @@ if df is not None:
                 st.success(analysis)
             except Exception as e:
                 st.error(f"❌ Gagal menganalisis: {e}")
-
 else:
     st.error("Tidak ada data candlestick tersedia.")
-
